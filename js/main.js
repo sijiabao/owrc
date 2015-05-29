@@ -5,6 +5,7 @@
     map = null,
     tiles = null,
     closeTooltip = null,
+    markers = [],
     options = {
       maxZoom: 5,
       minZoom: 3,
@@ -21,203 +22,90 @@
 
   // Init function to bootstrap the app.
   var init = function () {
-    map = L.map('map', options).setView([36.421, -71.411], 4);
-    tiles = L.tileLayer(tilesUrl, attributions);
-    tiles.addTo(map);
+
+    map = L.map('map', options).setView([31.7365746,-24.355225], 3);
+    var layer = new L.StamenTileLayer('watercolor');
+     map.addLayer(layer);
+    //tiles = L.tileLayer(tilesUrl, attributions);
+    //var layer = new L.StamenTileLayer('watercolor');
+    //tiles.addTo(map);
     getData();
   };
 
   // Get the data from the json file
   var getData = function () {
-    $.getJSON('data/immigrants.geo.json', renderDataToMap);
+    $.getJSON('data/split.json', renderDataToMap);
   };
 
   // Render the data to the map
   var renderDataToMap = function (data) {
-    statesLayer = L.geoJson(data, {
-      style: getStyle,
-      onEachFeature: onEachFeature
-    }).addTo(map);
-
-    barGraph("USA");
-    setTimeout(function(){bindEvents();}, 100);
-  };
 
 
-  var onEachFeature = function (feature, layer) {
-    layer.on({
-      click: updateSidebar,
-      mousemove: showTooltip,
-      mouseout: resetHighlight
-    })
-  };
-
-  var resetHighlight = function() {
-    closeTooltip = window.setTimeout(function() { map.closePopup(); }, 100);
-  };
-
-  var showTooltip = function(e) {
-    var layer = e.target;
-    popup.setLatLng(e.latlng);
-    popup.setContent(getMapTooltip(layer.feature.properties));
-    if(!popup._map) {
-      popup.openOn(map);
-    }
-    window.clearTimeout(closeTooltip);
-    layer.bringToFront();
-  };
-
-  var getMapTooltip = function(properties) {
-    return "<h3>" + properties.name + "</h3> <h4> <small>Immigrants count – </small>"+ properties.total +"</h4>"
-  };
-
-  // Update the sidebar graph
-  var updateSidebar = function (e) {
-    if(e.target.feature.properties['isActive'] != true) {
-      statesLayer.eachLayer(function(layer) {
-        layer.feature.properties.isActive = false
+    var LeafIcon = L.Icon.extend({
+        options: {
+          //shadowUrl: '../docs/images/leaf-shadow.png',
+          iconSize:     [50, 50],
+          shadowSize:   [0, 0],
+          iconAnchor:   [22, 94],
+          shadowAnchor: [4, 62],
+          popupAnchor:  [-3, -76]
+        }
       });
 
-      statesLayer.setStyle(setDisableStyle);
-
-      $('.current-state').text(e.target.feature.properties.name);
-      e.target.setStyle(highlightOnClick(e));
-      barGraph(e.target.feature.properties.name);
-      e.target.feature.properties['isActive'] = true;
-      pieChart($('.current-continent').text(), e.target.feature.properties.name);
+    var icons = [];
+    var bounds = new L.LatLngBounds();
+    var options = {
+      nearbyDistance: 20,
+      circleSpiralSwitchover: 100,
+      keepSpiderfied: true,
+      legWeight: 0
     }
-    else {
-      statesLayer.eachLayer(function(layer) {
-        layer.setStyle(getStyle(layer.feature))
-      });
-      $('.current-state').text("USA");
-      e.target.feature.properties['isActive'] = false;
-      barGraph("USA");
+    var oms = new OverlappingMarkerSpiderfier(map, options);
+
+    var bounds = new L.LatLngBounds();
+
+    for(var i=0; i < data.length; i++) {
+
+        var datum = data[i];
+        var loc = new L.LatLng(datum.Latitude, datum.Longitude);
+        icons.push(new LeafIcon({iconUrl: './images/'+ (i + 1) +'.png'}));
+        bounds.extend(loc);
+        var marker = L.marker(loc, {icon: icons[i]}).bindPopup(getPopup(data[i], i+1));
+        markers.push(marker)
+        //marker.desc = datum.d;
+        map.addLayer(marker);
+        oms.addMarker(marker);
+
     }
+    map.fitBounds(bounds);
   };
 
-  var bindEvents = function() {
+  var getPopup = function(data, i) {
+    return '<div class="cont">' +
+          // '  <div class="img">' +
+          // '    <img src="../images/'+ i +'.png" alt="" height="50" width="50">' +
+          // '  </div>' +
+          '  <div class="left title">' +
+          '    <h2> '+ data.Name +' </h2>' +
+          '    <h3> '+ data.Occupation +' </h3>' +
 
-    $('.nv-bar').on('click', function(e){
-      var index = $('.nv-bar').index(this);
-      var continents = ['Europe', 'Asia', 'Africa', 'Americans', 'Oceania'];
-      var currentContinent = continents[index];
-      $('.current-continent').text(currentContinent);
-      pieChart(currentContinent, $('.current-state').text());
-    });
-  };
+          '  </div>' +
 
-  var pieChart = function(cont, state) {
-    $.getJSON('data/sub-split.json', function(data){
-      var filteredData = data[0][state][cont];
-      renderPieChart(filteredData);
-    });
-  };
+          '  <div class="clear"></div> ' +
+          '  <div class="deatils">' +
+          '    <h4>' + data.State + ', ' +  data.Country +'</h4>' +
+          '    <h3>' + data.email+'</h3>' +
+          '    <a href="'+ data.link +'">' + data.link + '</a>' +
+          '  </div> <h3>About: </h3>' +
+          '  <div class="desc">' +
 
 
-  var renderPieChart = function(data) {
-    console.log(formatData(data));
-    nv.addGraph(function() {
-      var chart = nv.models.pieChart()
-        .x(function(d) { return d.label })
-        .y(function(d) { return d.value })
-        .showLabels(true);
+              data.about +
+          '  </div>' +
+          '</div>'
+  }
 
-      d3.select("#pie-chart svg")
-        .datum(formatData(data)[0].values)
-        .transition().duration(350)
-        .call(chart);
 
-      return chart;
-    });
-
-  };
-
-  // Disabled styles
-  var setDisableStyle = function() {
-    return {
-      weight: 0,
-      dashArray: '',
-      fillOpacity: 0.3
-    }
-  };
-
-  // Highlight styles
-  var highlightOnClick = function() {
-    return {
-      weight: 1,
-      color: '#fff',
-      dashArray: '',
-      fillOpacity: 1
-    }
-  };
-
-  var barGraph = function (state) {
-    $.getJSON('data/split.json', function (data) {
-      renderBarGraph(data[0][state]);
-    });
-  };
-
-  // Render the bar graph on the side
-  var renderBarGraph = function (stateData) {
-    nv.addGraph(function () {
-      var chart = nv.models.discreteBarChart()
-          .x(function (d) { return d.label })
-          .y(function (d) { return d.value })
-          .staggerLabels(false)
-          .tooltips(true)
-          .showValues(true);
-
-      chart.yAxis
-        .tickFormat(d3.format(',.0f'));
-
-      d3.select('#bar-chart svg')
-        .datum(formatData(stateData))
-        .call(chart);
-
-      nv.utils.windowResize(chart.update);
-      return chart;
-    });
-  };
-
-  // Prepare our data in a certain format
-  var formatData = function (data) {
-
-    var output = [
-      {
-        key: "Number of immigrants",
-        values: []
-      }
-    ];
-
-    for (var key in data) {
-      output[0].values.push({
-        "label": key,
-        "value": data[key]
-      })
-    }
-    return output;
-  };
-
-  // Util Methods
-  var getStyle = function (feature) {
-    return {
-      fillColor: getColor(feature.properties.total),
-      weight: 1,
-      opacity: 0.9,
-      color: 'white',
-      dashArray: '3',
-      fillOpacity: 0.9
-    };
-  };
-
-  // Returns a color based on the scale
-  // Refer https://github.com/mbostock/d3/wiki/Quantitative-Scales
-  var getColor = function (value) {
-    return d3.scale.linear()
-      .domain([18568, 4314692]) // Min and Max values
-      .range(['#fdbb84', '#d7301f'])(value)
-  };
 
   // Initialize our application.
   init();
