@@ -5,6 +5,7 @@
     map = null,
     tiles = null,
     closeTooltip = null,
+    markers = [],
     options = {
       maxZoom: 5,
       minZoom: 3,
@@ -21,27 +22,126 @@
 
   // Init function to bootstrap the app.
   var init = function () {
-    map = L.map('map', options).setView([36.421, -71.411], 4);
-    tiles = L.tileLayer(tilesUrl, attributions);
-    tiles.addTo(map);
+
+    map = L.map('map', options).setView([31.7365746,-24.355225], 3);
+    var layer = new L.StamenTileLayer('watercolor');
+     map.addLayer(layer);
+    //tiles = L.tileLayer(tilesUrl, attributions);
+    //var layer = new L.StamenTileLayer('watercolor');
+    //tiles.addTo(map);
     getData();
   };
 
   // Get the data from the json file
   var getData = function () {
-    $.getJSON('data/immigrants.geo.json', renderDataToMap);
+    $.getJSON('data/split.json', renderDataToMap);
   };
 
   // Render the data to the map
   var renderDataToMap = function (data) {
-    statesLayer = L.geoJson(data, {
-      style: getStyle,
-      onEachFeature: onEachFeature
-    }).addTo(map);
 
-    barGraph("USA");
-    setTimeout(function(){bindEvents();}, 100);
+
+    var LeafIcon = L.Icon.extend({
+        options: {
+          shadowUrl: '../docs/images/leaf-shadow.png',
+          iconSize:     [50, 50],
+          shadowSize:   [0, 0],
+          iconAnchor:   [22, 94],
+          shadowAnchor: [4, 62],
+          popupAnchor:  [-3, -76]
+        }
+      });
+
+    var icons = [];
+    console.log(data.length)
+    var bounds = new L.LatLngBounds();
+    var options = {
+      nearbyDistance: 20,
+      circleSpiralSwitchover: 100,
+      keepSpiderfied: true,
+      legWeight: 0
+    }
+    var oms = new OverlappingMarkerSpiderfier(map, options);
+
+    var bounds = new L.LatLngBounds();
+
+    for(var i=0; i < data.length; i++) {
+
+        var datum = data[i];
+        var loc = new L.LatLng(datum.Latitude, datum.Longitude);
+        icons.push(new LeafIcon({iconUrl: '../images/'+ (i + 1) +'.png'}));
+        bounds.extend(loc);
+        var marker = L.marker(loc, {icon: icons[i]}).bindPopup(getPopup(data[i], i+1));
+        markers.push(marker)
+        //marker.desc = datum.d;
+        map.addLayer(marker);
+        oms.addMarker(marker);
+
+    }
+    map.fitBounds(bounds);
+    //var popup = new L.Popup({closeButton: false, offset: new L.Point(0.5, 0)});
+    // oms.addListener('click', function(marker) {
+    //   console.log(marker)
+    //   //var id = markers[i]._icon.src.split['/'][4].split['.'][0]
+    //   popup.setContent(marker.desc);
+    //   popup.setLatLng(marker.getLatLng());
+    //   //map.openPopup(popup);
+    // });
+    // oms.addListener('spiderfy', function(markers) {
+    //   for (var i = 0, len = markers.length; i < len; i ++)
+    //     var id = markers[i]._icon.src.split['/'][4].split['.'][0]
+    //     markers[i].setIcon(new markers[id]);
+    //   map.closePopup();
+    // });
+    // oms.addListener('unspiderfy', function(markers) {
+    //   for (var i = 0, len = markers.length; i < len; i ++)
+    //     markers[i].setIcon(new markers[id]);
+    // });
+
+
+
+
+    // var greenIcon = new LeafIcon({iconUrl: '../images/1.jpg'}),
+    //   redIcon = new LeafIcon({iconUrl: '../images/2.jpg'}),
+    //   orangeIcon = new LeafIcon({iconUrl: '../images/3.jpg'});
+
+
+    // L.marker([data[0]['Latitude'], data[0]['Longitude']], {icon: greenIcon}).bindPopup("I am a green leaf.").addTo(map);
+    // L.marker([51.495, -0.083], {icon: redIcon}).bindPopup("I am a red leaf.").addTo(map);
+    // L.marker([51.49, -0.1], {icon: orangeIcon}).bindPopup("I am an orange leaf.").addTo(map);
+
+
+    // statesLayer = L.geoJson(data, {
+    //   style: getStyle,
+    //   onEachFeature: onEachFeature
+    // }).addTo(map);
+
+    // barGraph("USA");
+    // setTimeout(function(){bindEvents();}, 100);
   };
+
+  var getPopup = function(data, i) {
+    return '<div class="cont">' +
+          // '  <div class="img">' +
+          // '    <img src="../images/'+ i +'.png" alt="" height="50" width="50">' +
+          // '  </div>' +
+          '  <div class="left title">' +
+          '    <h2> '+ data.Name +' </h2>' +
+          '    <h3> '+ data.Occupation +' </h3>' +
+          '  </div>' +
+
+          '  <div class="clear"></div> ' +
+          '  <div class="deatils">' +
+          '    <h3>' + data.email+'</h3>' +
+          '    <a href="'+ data.link +'">' + data.link + '</a>' +
+          '  </div> <h3>About: </h3>' +
+          '  <div class="desc">' +
+
+
+              data.about +
+          '  </div>' +
+          '</div>'
+  }
 
 
   var onEachFeature = function (feature, layer) {
